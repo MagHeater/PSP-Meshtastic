@@ -468,12 +468,6 @@ void wifiEventCallback(arduino_event_id_t event, arduino_event_info_t info) {
 // SETUP / LOOP
 // ═══════════════════════════════════════════════════════════════════════════
 void setup() {
-    if(esp_reset_reason() == ESP_RST_DEEPSLEEP) {
-    delay(500);
-    ESP.restart();
-  }
-  delay(2000);
-  
   Serial.begin(115200);
   Serial2.begin(38400, SERIAL_8N1, 13, 12);
   delay(1500);
@@ -484,6 +478,18 @@ void setup() {
 
   memset(recvSessions, 0, sizeof(recvSessions));
   prefs.begin("mesh_psp", false);
+
+// One-time clear für v16
+if (!prefs.getBool("v16_init", false)) {
+    Serial.println("[NVS] Erststart v16 — NVS wird bereinigt...");
+    prefs.clear();
+    prefs.putBool("v16_init", true);
+    Serial.println("[NVS] Bereinigt. Neustart...");
+    delay(500);
+    ESP.restart();
+}
+
+Serial.printf("[NVS] Freie Einträge: %d\n", prefs.freeEntries());
   loadFavorites();
   loadPresets();
   loadWifiSettings();
@@ -523,24 +529,6 @@ void setup() {
   server.on("/wifisave",     HTTP_POST, handleWifiSave);
   server.on("/sec_mode",     [](){ handleSecMode(); });
   server.on("/sec_wl_rm",    [](){ handleSecWlRemove(); });
-server.on("/shutdown", [](){
-  server.send(200, "text/html; charset=utf-8",
-    "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-    "<style>html,body{background:#000;color:#ccc;font-family:monospace;"
-    "padding:8px;font-size:11px}</style></head><body>"
-    "<div style='color:#ff4444;margin-bottom:6px'>ESP32 wird heruntergefahren...</div>"
-    "<div style='color:#333;font-size:9px'>Stromversorgung kann getrennt werden.</div>"
-    "</body></html>");
-  server.client().flush();
-  delay(500);
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
-  esp_camera_deinit();
-  digitalWrite(CAM_PIN_PWDN, HIGH);
-  digitalWrite(FLASH_LED_PIN, LOW);
-  btStop();
-  esp_deep_sleep_start();
-});
   server.begin();
 
   initSerialConnection();
@@ -1319,28 +1307,28 @@ void handleTabs(){
   String active=server.hasArg("active")?server.arg("active"):"ch1";
   bool secAlert = secWhitelistMode && strlen(secCurrentMac) > 0 && !secClientKnown;
   String h="<!DOCTYPE html><html><head><meta charset='UTF-8'>";
-h+="<style>"
-  "html,body{margin:0;padding:0 2px;background:#111;overflow:hidden;"
-    "display:flex;gap:2px;height:20px;box-sizing:border-box;font-family:monospace}"
-  ".tab{flex:1;display:flex;align-items:center;justify-content:center;"
-    "background:#1a1a1a;color:#556655;"
-    "text-decoration:none;border:1px solid #2a2a2a;"
-    "font-size:10px;font-weight:bold;text-align:center;"
-    "box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;"
-    "letter-spacing:0px;line-height:1}"
-  ".tab.on{background:#003300;color:#00ff00;border:1px solid #00aa00;"
-    "border-bottom:2px solid #00ff00}"
-  ".tab:hover{color:#00ff00;background:#002200}"
-  ".tab-cam{color:#006688;border-color:#004455}"
-  ".tab-cam.on{background:#001520;color:#00ccff;border-color:#0077aa;"
-    "border-bottom:2px solid #00ccff}"
-  ".tab-set{color:#666644;border-color:#333322}"
-  ".tab-set.on{background:#151500;color:#cccc00;border-color:#888800;"
-    "border-bottom:2px solid #cccc00}"
-  ".tab-set-alert{color:#ff6600;border-color:#662200}"
-  ".tab-set-alert.on{background:#1a0500;color:#ff6600;border-color:#882200;"
-    "border-bottom:2px solid #ff6600}"
-  "</style>";
+  h+="<style>"
+    "html,body{margin:0;padding:3px 2px;background:#111;overflow:hidden;"
+      "display:flex;gap:2px;height:56px;box-sizing:border-box;font-family:monospace}"
+    ".tab{flex:1;display:flex;align-items:center;justify-content:center;"
+      "background:#1a1a1a;color:#556655;"
+      "text-decoration:none;border:1px solid #2a2a2a;border-bottom:none;"
+      "font-size:15px;font-weight:bold;text-align:center;"
+      "box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;"
+      "letter-spacing:0.5px;line-height:1}"
+    ".tab.on{background:#003300;color:#00ff00;border:1px solid #00aa00;"
+      "border-bottom:3px solid #00ff00}"
+    ".tab:hover{color:#00ff00;background:#002200}"
+    ".tab-cam{color:#006688;border-color:#004455}"
+    ".tab-cam.on{background:#001520;color:#00ccff;border-color:#0077aa;"
+      "border-bottom:3px solid #00ccff}"
+    ".tab-set{color:#666644;border-color:#333322}"
+    ".tab-set.on{background:#151500;color:#cccc00;border-color:#888800;"
+      "border-bottom:3px solid #cccc00}"
+    ".tab-set-alert{color:#ff6600;border-color:#662200}"
+    ".tab-set-alert.on{background:#1a0500;color:#ff6600;border-color:#882200;"
+      "border-bottom:3px solid #ff6600}"
+    "</style></head><body>";
 
   struct { const char* id; const char* lbl; const char* url; int style; } tabs[]={
     {"ch1","CH1","/?view=ch1",0},
@@ -1628,15 +1616,7 @@ void handleSettings(){
           "Schutzmassnahmen: Max. 1 Client | 802.11b | MAC-Whitelist | LED-Alarm</div>";
     html+="</div>";
   }
-html+="<div style='margin:10px 0 6px 0;border-top:1px solid #1a0000;padding-top:8px'>";
-html+="<div class='set-label'>SYSTEM</div>";
-html+="<a href='/shutdown' style='display:block;background:#1a0000;color:#ff4444;"
-      "border:1px solid #882222;padding:6px 10px;font-family:monospace;font-size:11px;"
-      "text-align:center;text-decoration:none;margin-top:4px'>"
-      "&#9210; ESP32 herunterfahren</a>";
-html+="<div style='color:#2a1010;font-size:8px;margin-top:3px'>"
-      "Deep Sleep &mdash; Neustart nur per Reset/Strom</div>";
-html+="</div>";
+
   html+="<hr><div style='color:#333;font-size:9px;margin-top:4px'>"
         "Mesh PSP v16 &mdash; 2026-06-14T14:00:00Z</div>";
   html+="</body></html>";
