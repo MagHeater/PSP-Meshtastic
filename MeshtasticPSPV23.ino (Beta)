@@ -1750,7 +1750,7 @@ void handleTrace(){
     html+="</div>"; // trace-box hin
 
     // Rückroute (falls vorhanden und unterschiedlich)
-    if(traceState.hopBackCount > 0){
+    if(traceState.hopBackCount >= 0){
       html+="<div class='trace-box' style='border-color:#004466;background:#000f18'>";
       html+="<div style='color:#004466;font-size:9px;margin-bottom:4px'>ROUTE ZURÜCK</div>";
       // Rückroute: vom Ziel her betrachtet
@@ -1775,7 +1775,6 @@ void handleTrace(){
       html+="</div>";
       html+="</div>"; // trace-box zurück
     }
-
     // Hop-Zusammenfassung
     html+="<div style='color:#444;font-size:9px;margin-top:4px'>";
     if(traceState.hopCount == 0)
